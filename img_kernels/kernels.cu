@@ -69,6 +69,14 @@ extern "C" {
  * |_|_|_|_|_|_|_|_|
  * | | | | | | | | |
  * .---------------.
+
+ * 30 May 2017
+ * 
+ * So the question that still is floating around after sleeping on this is whether a kernel
+ * is better off doing a 1 pixel operation for every thread while leaving big fractions of
+ * the kernel completely idle, or if a kernel is better off mapping work to every thread
+ * available. That second option forces the kernel to launch some threads that
+ * don't execute every instruction...
  */  
 __global__
 void complex_kernel(int dim, rgb_pixel* src, rgb_pixel* dest) {
@@ -94,4 +102,21 @@ void complex_kernel(int dim, rgb_pixel* src, rgb_pixel* dest) {
       }
     }
   }
+}
+
+__host__
+void launch_complex_kernel(dim3 grid, dim3 block, int dim, rgb_pixel* src, rgb_pixel* dest) {
+  cudaEvent_t start, stop;
+  cudaEventCreate(&start);
+  cudaEventCreate(&stop);
+  
+  printf("Launching complex kernel...\n");
+  cudaEventRecord(start);
+  complex_kernel<<<grid, block>>>(dim, src, dest);
+  cudaEventRecord(stop);
+
+  cudaEventSynchronize(stop);
+  float ms = 0;
+  cudaEventElapsedTime(&ms, start, stop);
+  printf("Kernel execution time: %f\n", ms);
 }
