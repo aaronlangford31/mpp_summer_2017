@@ -105,14 +105,17 @@ void complex_kernel(int dim, rgb_pixel* src, rgb_pixel* dest) {
 }
 
 __host__
-void launch_complex_kernel(dim3 grid, dim3 block, int dim, rgb_pixel* src, rgb_pixel* dest) {
+void launch_complex_kernel(int grid, int block, int dim, rgb_pixel* src, rgb_pixel* dest) {
   cudaEvent_t start, stop;
   cudaEventCreate(&start);
   cudaEventCreate(&stop);
   
   printf("Launching complex kernel...\n");
+
+  dim3 blk(grid, grid);
+  dim3 thd(block, block);
   cudaEventRecord(start);
-  complex_kernel<<<grid, block>>>(dim, src, dest);
+  complex_kernel<<<blk, thd>>>(dim, src, dest);
   cudaEventRecord(stop);
 
   cudaEventSynchronize(stop);

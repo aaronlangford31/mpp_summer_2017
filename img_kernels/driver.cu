@@ -59,39 +59,47 @@ void generate_simple_image(int height, int width, rgb_pixel** out) {
 }
 
 __host__
-void generate_grad_image(int height, int width, rgb_pixel** out) {
+void generate_grad_image(int height, int width, int blocks, int threads, rgb_pixel** d_img_ref) {
+  cudaEvent_t start, stop;
+  cudaEventCreate(&start);
+  cudaEventCreate(&stop);
+  
+  printf("Launching image generation kernel...\n");
   rgb_pixel* d_image;
   int num_pxls = height * width;
   int size = num_pxls * sizeof(rgb_pixel);
   cudaMalloc((void**) &d_image, size);
-  *out = (rgb_pixel*) malloc(size);
   
-  dim3 blk(ceil(height/32.0), ceil(width/32.0));
-  dim3 thd(32,32);
-  generate_gradient_kernel<<<blk, thd>>>(height, width, d_image);
+  dim3 blk(blocks, blocks);
+  dim3 thd(threads, threads);
 
-  cudaMemcpy(*out, d_image, size, cudaMemcpyDeviceToHost);
-  cudaFree(d_image);
+  cudaEventRecord(start);
+  generate_gradient_kernel<<<blk, thd>>>(height, width, d_image);
+  cudaEventRecord(stop);
+  
+  float ms = 0.0;
+  cudaEventElapsedTime(&ms, start, stop);
+  printf("Kernel execution time: %f\n", ms);
+  
+  *d_img_ref = d_image;
 }
 
 int main(int argc, char** argv) {
-  if(argc < 4) {
-    printf("Expected args for height, width, and file name.\n");
+  if(argc < 5) {
+    printf("Expected args for image dim, grid dim, block dim, and image file.\n");
     exit(1);
   }
-  int h = atoi(argv[1]);
-  int w = atoi(argv[2]);
-  char* fname = argv[3];
+  
+  char* img_file = argv[4];
+  int dim, blocks, threads;
+  dim = atoi(argv[1]);
+  blocks = atoi(argv[2]);
+  threads = atoi(argv[3]);
+  
   rgb_pixel* img;
+  generate_grad_image(dim, dim, blocks, threads, &img);
 
-#if MODE == 1
-  generate_simple_image(h, w, &img);
-#elif MODE == 2
-  generate_grad_image(h, w, &img);
-#else
-  printf("This program was compiled incorrectly. Make sure to specify the MODE flag.\n");
-  exit(1);
-#endif
-  write_ppm(fname, img, h, w);
+  launch_complex_kernel(
+  write_ppm(img_file, img, h, w);
   return 0;
 }
