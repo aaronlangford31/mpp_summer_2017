@@ -84,20 +84,27 @@ void complex_kernel(int dim, rgb_pixel* src, rgb_pixel* dest) {
   int thread_dim = gridDim.x * blockDim.x;
   // Need to figure out how many pixels per row/col a thread needs to cover
   int num_pixs = ceil((float)dim / (float)thread_dim);
-  
-  int row = blockIdx.x * blockDim.x * num_pixs + threadIdx.x * num_pixs;
-  int col = blockIdx.y * blockDim.y * num_pixs + threadIdx.x * num_pixs;
+
+  // row_width is the width of one row of threads in a grid
+  int row_width = blockDim.x * num_pixs * num_pixs;   
+
+  int row = blockIdx.y * (gridDim.y * row_width) + threadIdx.y * row_width;
+  int col = row + (blockIdx.x * blockDim.x * num_pixs);
 
   int r, c;
-  for(r = 0; r < num_pixs; r++) {
-    int roff = r + row;
-    if(roff < dim) {
+  // p_width is the width of a row corresponding to the row of pixels in the image. The number represents
+  // how many threads cover that single row.
+  int p_width = (row_width/num_pixs);
+  for(r = row; r < num_pixs; r+=p_width) {
+    if(r < p_width*p_width) {
       for(c = 0; c < num_pixs; c++) {
-        if(coff < dim) {
-          int coff = c + col;
-          rgb_pixel p = src[roff * dim + coff];
+        int coff = c + col;
+        // r is the starting index of the row, and we do not want to go past the width of the image,
+        // so our if statement checks if we've run past row + dimension.
+        if(coff < r + dim) {
+          rgb_pixel p = src[coff];
           p.r = p.g = p.b = (char)(((unsigned)p.r + (unsigned)p.g + (unsigned)p.b) / 3);
-          dest[(dim - coff - 1) * dim + (dim - roff - 1)] = p;
+          dest[/*Shoot, this part got weird!*/] = p;
         }
       }
     }
@@ -105,21 +112,30 @@ void complex_kernel(int dim, rgb_pixel* src, rgb_pixel* dest) {
 }
 
 __host__
-void launch_complex_kernel(int grid, int block, int dim, rgb_pixel* src, rgb_pixel* dest) {
+void launch_complex_kernel(int grid, int block, int dim, rgb_pixel* d_src, rgb_pixel** h_dest) {
   cudaEvent_t start, stop;
   cudaEventCreate(&start);
   cudaEventCreate(&stop);
   
   printf("Launching complex kernel...\n");
+  
+  rgb_pixel* d_dest;
+  cudaMalloc((void**) &d_dest, sizeof(rgb_pixel) * dim * dim); 
 
   dim3 blk(grid, grid);
   dim3 thd(block, block);
   cudaEventRecord(start);
-  complex_kernel<<<blk, thd>>>(dim, src, dest);
+  complex_kernel<<<blk, thd>>>(dim, d_src, d_dest);
   cudaEventRecord(stop);
 
   cudaEventSynchronize(stop);
   float ms = 0;
   cudaEventElapsedTime(&ms, start, stop);
   printf("Kernel execution time: %f\n", ms);
+
+  *h_dest = (rgb_pixel*)malloc(sizeof(rgb_pixel) * dim * dim);
+  cudaMemcpy(*h_dest, d_dest, sizeof(rgb_pixel) * dim * dim, cudaMemcpyDeviceToHost);
+
+  cudaFree(d_src); cudaFree(d_dest);
+
 }

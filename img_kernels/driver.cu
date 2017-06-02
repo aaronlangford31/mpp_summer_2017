@@ -6,7 +6,11 @@
 extern "C" {
   #include "defs.h"
   #include "ppm.h"
+  #include "defs.h" 
 }
+
+void launch_complex_kernel(int, int, int, rgb_pixel*, rgb_pixel**);
+
 __global__
 void generate_simple_image_kernel(int height, int width, rgb_pixel* out) {
   int row = blockIdx.x * blockDim.x + threadIdx.x;
@@ -96,10 +100,13 @@ int main(int argc, char** argv) {
   blocks = atoi(argv[2]);
   threads = atoi(argv[3]);
   
-  rgb_pixel* img;
-  generate_grad_image(dim, dim, blocks, threads, &img);
+  rgb_pixel* h_img, *d_img;
+  generate_grad_image(dim, dim, blocks, threads, &d_img);
 
-  launch_complex_kernel(
-  write_ppm(img_file, img, h, w);
+  launch_complex_kernel(blocks, threads, dim, d_img, &h_img);
+  
+  write_ppm(img_file, h_img, dim, dim);
+
+  free(h_img);
   return 0;
 }
