@@ -4,8 +4,8 @@
 #include <stdlib.h>
 #include <string.h>
 extern "C" {
-  #include "defs.h"
-  #include "ppm.h"
+#include "defs.h"
+#include "ppm.h"
 }
 
 /* There needs to be some way to map the block idx, thd indx to a chunk of the picture
@@ -80,16 +80,15 @@ extern "C" {
  */  
 __global__
 void complex_kernel(int dim, rgb_pixel* src, rgb_pixel* dest) {
-  int stride = blockDim.x;
-  int r_stride = ceil((float)dim / (float)gridDim.x);
-  int start_row = r_stride * blockIdx.x;
+  int c_stride = blockDim.x;
+  int r_stride = gridDim.y;
 
   int i, j;
-  for(i=start_row; (i < dim) && (i < start_row + r_stride); i++) {
-    for(j = threadIdx.x; j < dim; j+=stride) {
+  for(i=blockIdx.x; i < dim; i+=r_stride) {
+    for(j = threadIdx.x; j < dim; j+=c_stride) {
       rgb_pixel px = src[(i*dim) + j];
       px.r = px.g = px.b = ((int)px.r + (int)px.g + (int)px.b) / 3;
-      
+
       int dest_r, dest_c;
       dest_r = (dim - j - 1);
       dest_c = (dim - i - 1);
@@ -103,16 +102,14 @@ void launch_complex_kernel(int grid, int block, int dim, rgb_pixel* d_src, rgb_p
   cudaEvent_t start, stop;
   cudaEventCreate(&start);
   cudaEventCreate(&stop);
-  
+
   printf("Launching complex kernel...\n");
-  
+
   rgb_pixel* d_dest;
   cudaMalloc((void**) &d_dest, sizeof(rgb_pixel) * dim * dim); 
 
-  dim3 blk(grid, grid);
-  dim3 thd(block, block);
   cudaEventRecord(start);
-  complex_kernel<<<blk, thd>>>(dim, d_src, d_dest);
+  complex_kernel<<<grid, block>>>(dim, d_src, d_dest);
   cudaEventRecord(stop);
 
   cudaEventSynchronize(stop);
