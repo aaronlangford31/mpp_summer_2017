@@ -80,33 +80,20 @@ extern "C" {
  */  
 __global__
 void complex_kernel(int dim, rgb_pixel* src, rgb_pixel* dest) {
-  // I just am going to assume that the tiles will always be squares
-  int thread_dim = gridDim.x * blockDim.x;
-  // Need to figure out how many pixels per row/col a thread needs to cover
-  int num_pixs = ceil((float)dim / (float)thread_dim);
+  int stride = blockDim.x;
+  int r_stride = ceil((float)dim / (float)gridDim.x);
+  int start_row = r_stride * blockIdx.x;
 
-  // row_width is the width of one row of threads in a grid
-  int row_width = blockDim.x * num_pixs * num_pixs;   
-
-  int row = blockIdx.y * (gridDim.y * row_width) + threadIdx.y * row_width;
-  int col = row + (blockIdx.x * blockDim.x * num_pixs);
-
-  int r, c;
-  // p_width is the width of a row corresponding to the row of pixels in the image. The number represents
-  // how many threads cover that single row.
-  int p_width = (row_width/num_pixs);
-  for(r = row; r < num_pixs; r+=p_width) {
-    if(r < p_width*p_width) {
-      for(c = 0; c < num_pixs; c++) {
-        int coff = c + col;
-        // r is the starting index of the row, and we do not want to go past the width of the image,
-        // so our if statement checks if we've run past row + dimension.
-        if(coff < r + dim) {
-          rgb_pixel p = src[coff];
-          p.r = p.g = p.b = (char)(((unsigned)p.r + (unsigned)p.g + (unsigned)p.b) / 3);
-          dest[/*Shoot, this part got weird!*/] = p;
-        }
-      }
+  int i, j;
+  for(i=start_row; (i < dim) && (i < start_row + r_stride); i++) {
+    for(j = threadIdx.x; j < dim; j+=stride) {
+      rgb_pixel px = src[(i*dim) + j];
+      px.r = px.g = px.b = ((int)px.r + (int)px.g + (int)px.b) / 3;
+      
+      int dest_r, dest_c;
+      dest_r = (dim - j - 1);
+      dest_c = (dim - i - 1);
+      dest[(dest_r * dim) + dest_c] = px;
     }
   }
 }
