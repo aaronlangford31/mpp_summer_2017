@@ -81,11 +81,13 @@ extern "C" {
 __global__
 void complex_kernel(int dim, rgb_pixel* src, rgb_pixel* dest) {
   int c_stride = blockDim.x;
-  int r_stride = gridDim.x;
+  int r_stride = gridDim.y;
+  int gridWidth = ceil((float)dim / (float)gridDim.x);
+  int j_anchor = blockIdx.x * gridWidth;
 
   int i, j;
-  for(i=blockIdx.x; i < dim; i+=r_stride) {
-    for(j = threadIdx.x; j < dim; j+=c_stride) {
+  for(i=blockIdx.y; i < dim; i+=r_stride) {
+    for(j = j_anchor + threadIdx.x; j < (j_anchor + gridWidth) && j < dim; j+=c_stride) {
       rgb_pixel px = src[(i*dim) + j];
       px.r = px.g = px.b = ((int)px.r + (int)px.g + (int)px.b) / 3;
 
@@ -98,17 +100,17 @@ void complex_kernel(int dim, rgb_pixel* src, rgb_pixel* dest) {
 }
 
 __host__
-void launch_complex_kernel(int grid, int block, int dim, rgb_pixel* d_src, rgb_pixel** h_dest) {
+void launch_complex_kernel(int gridX, int gridY, int block, int dim, rgb_pixel* d_src, rgb_pixel** h_dest) {
   cudaEvent_t start, stop;
   cudaEventCreate(&start);
   cudaEventCreate(&stop);
 
   printf("Launching complex kernel...\n");
-  printf("Blocks: %d \t Threads: %d\n", grid, block);
+  printf("Blocks: x: %d, y: %d \t Threads: %d\n", gridX, gridY, block);
   rgb_pixel* d_dest;
   cudaMalloc((void**) &d_dest, sizeof(rgb_pixel) * dim * dim); 
  
-  dim3 grd(grid);
+  dim3 grd(gridX, gridY);
   dim3 blk(block);
 
   cudaEventRecord(start);
@@ -124,5 +126,69 @@ void launch_complex_kernel(int grid, int block, int dim, rgb_pixel* d_src, rgb_p
   cudaMemcpy(*h_dest, d_dest, sizeof(rgb_pixel) * dim * dim, cudaMemcpyDeviceToHost);
 
   cudaFree(d_src); cudaFree(d_dest);
-
 }
+
+__global__
+void motion_kernel(int dim, rgb_pixel* src, rgb_pixel* dest) {
+  int c_stride = blockDim.x;
+  int r_stride = gridDim.y;
+  int gridWidth = ceil((float)dim / (float)gridDim.x);
+  int j_anchor = blockIdx.x * gridWidth;
+
+  int i, j;
+  for(i=blockIdx.y; i < dim; i+=r_stride) {
+    for(j = j_anchor + threadIdx.x; j < (j_anchor + gridWidth) && j < dim; j+=c_stride) {
+      int ii, jj;
+      int r, g, b;
+      r = g = b = 0;
+
+      int num_neighbors = 0;
+
+      for(ii=0; ii < 3; ii++) {
+        for(jj=0; jj < 3; jj++) {
+          if((i+ii < dim) && (j + jj < dim)) {
+            num_neighbors++;
+            rgb_pixel px_n = src[((i+ii)*dim) + jj + j];
+            r += (int)px_n.r;
+            g += (int)px_n.g;
+            b += (int)px_n.b; 
+          }
+        }
+      }
+      
+      dest[(i * dim) + j].r = r / num_neighbors;
+      dest[(i * dim) + j].g = g / num_neighbors;
+      dest[(i * dim) + j].b = b / num_neighbors;
+    }
+  }
+}
+
+__host__
+void launch_motion_kernel(int gridX, int gridY, int block, int dim, rgb_pixel* d_src, rgb_pixel** h_dest) {
+  cudaEvent_t start, stop;
+  cudaEventCreate(&start);
+  cudaEventCreate(&stop);
+
+  printf("Launching motion kernel...\n");
+  printf("Blocks: x: %d, y: %d \t Threads: %d\n", gridX, gridY, block);
+  rgb_pixel* d_dest;
+  cudaMalloc((void**) &d_dest, sizeof(rgb_pixel) * dim * dim); 
+ 
+  dim3 grd(gridX, gridY);
+  dim3 blk(block);
+
+  cudaEventRecord(start);
+  motion_kernel<<<grd, blk>>>(dim, d_src, d_dest);
+  cudaEventRecord(stop);
+
+  cudaEventSynchronize(stop);
+  float ms = 0;
+  cudaEventElapsedTime(&ms, start, stop);
+  printf("Kernel execution time: %f\n", ms);
+
+  *h_dest = (rgb_pixel*)malloc(sizeof(rgb_pixel) * dim * dim);
+  cudaMemcpy(*h_dest, d_dest, sizeof(rgb_pixel) * dim * dim, cudaMemcpyDeviceToHost);
+
+  cudaFree(d_src); cudaFree(d_dest);
+}
+

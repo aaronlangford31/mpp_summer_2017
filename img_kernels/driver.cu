@@ -9,7 +9,8 @@ extern "C" {
   #include "defs.h" 
 }
 
-void launch_complex_kernel(int, int, int, rgb_pixel*, rgb_pixel**);
+void launch_complex_kernel(int, int, int, int, rgb_pixel*, rgb_pixel**);
+void launch_motion_kernel(int, int, int, int, rgb_pixel*, rgb_pixel**);
 
 __global__
 void generate_simple_image_kernel(int height, int width, rgb_pixel* out) {
@@ -90,27 +91,36 @@ void generate_grad_image(int height, int width, int blocks, int threads, rgb_pix
 }
 
 int main(int argc, char** argv) {
-  if(argc < 4) {
-    printf("Expected args for image dim, grid dim, block dim.\n");
+  if(argc < 6) {
+    printf("Expected args for image dim, grid x dim, grid y dim, block dim, and mode.\n");
     exit(1);
   }
   
-  int dim, blocks, threads;
+  int dim, blocksX, blocksY, threads;
   dim = atoi(argv[1]);
-  blocks = atoi(argv[2]);
-  threads = atoi(argv[3]);
+  blocksX = atoi(argv[2]);
+  blocksY = atoi(argv[3]);
+  threads = atoi(argv[4]);
+  char mode = argv[5][0];
   
   rgb_pixel* h_img, *d_img;
-  generate_grad_image(dim, dim, blocks, threads, &d_img);
+  generate_grad_image(dim, dim, blocksX, threads, &d_img);
 
   h_img = (rgb_pixel*)malloc(dim*dim*sizeof(rgb_pixel));
   cudaMemcpy(h_img, d_img, sizeof(rgb_pixel) * dim*dim, cudaMemcpyDeviceToHost);
   write_ppm("actual.ppm", h_img, dim, dim);
   
-  launch_complex_kernel(blocks, threads, dim, d_img, &h_img);
+
+  if(mode == 'c') {
+    launch_complex_kernel(blocksX, blocksY, threads, dim, d_img, &h_img);
+  } else if (mode == 'm') {
+    launch_motion_kernel(blocksX, blocksY, threads, dim, d_img, &h_img);
+  } else {
+    exit(1);
+  }
 
   char img_file[255];
-  sprintf(img_file, "%d.%d.%d.ppm", dim, blocks, threads);
+  sprintf(img_file, "%d.%d.%d.%d.%c.ppm", dim, blocksX, blocksY, threads, mode);
   write_ppm(img_file, h_img, dim, dim);
 
   free(h_img);
