@@ -81,13 +81,13 @@ extern "C" {
 __global__
 void complex_kernel(int dim, rgb_pixel* src, rgb_pixel* dest) {
   int c_stride = blockDim.x;
-  /*int r_stride = gridDim.y;*/
+  int r_stride = gridDim.x;
 
   int i, j;
-  for(i=0; i < dim; i++) {
+  for(i=blockIdx.x; i < dim; i+=r_stride) {
     for(j = threadIdx.x; j < dim; j+=c_stride) {
       rgb_pixel px = src[(i*dim) + j];
-      //px.r = px.g = px.b = ((int)px.r + (int)px.g + (int)px.b) / 3;
+      px.r = px.g = px.b = ((int)px.r + (int)px.g + (int)px.b) / 3;
 
       int dest_r, dest_c;
       dest_r = (dim - j - 1);
