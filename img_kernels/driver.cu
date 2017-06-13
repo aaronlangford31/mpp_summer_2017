@@ -74,13 +74,14 @@ void generate_grad_image(int height, int width, int blocks, int threads, rgb_pix
   int size = num_pxls * sizeof(rgb_pixel);
   cudaMalloc((void**) &d_image, size);
   
-  dim3 blk(blocks, blocks);
-  dim3 thd(threads, threads);
+  dim3 blk(ceil(height/32.0), ceil(width/32.0));
+  dim3 thd(32, 32);
 
   cudaEventRecord(start);
   generate_gradient_kernel<<<blk, thd>>>(height, width, d_image);
   cudaEventRecord(stop);
   
+  cudaEventSynchronize(stop);
   float ms = 0.0;
   cudaEventElapsedTime(&ms, start, stop);
   printf("Kernel execution time: %f\n", ms);
@@ -89,12 +90,11 @@ void generate_grad_image(int height, int width, int blocks, int threads, rgb_pix
 }
 
 int main(int argc, char** argv) {
-  if(argc < 5) {
-    printf("Expected args for image dim, grid dim, block dim, and image file.\n");
+  if(argc < 4) {
+    printf("Expected args for image dim, grid dim, block dim.\n");
     exit(1);
   }
   
-  char* img_file = argv[4];
   int dim, blocks, threads;
   dim = atoi(argv[1]);
   blocks = atoi(argv[2]);
@@ -103,8 +103,14 @@ int main(int argc, char** argv) {
   rgb_pixel* h_img, *d_img;
   generate_grad_image(dim, dim, blocks, threads, &d_img);
 
-  launch_complex_kernel(blocks, threads, dim, d_img, &h_img);
+  h_img = (rgb_pixel*)malloc(dim*dim*sizeof(rgb_pixel));
+  cudaMemcpy(h_img, d_img, sizeof(rgb_pixel) * dim*dim, cudaMemcpyDeviceToHost);
+  write_ppm("actual.ppm", h_img, dim, dim);
   
+  launch_complex_kernel(blocks, threads, dim, d_img, &h_img);
+
+  char img_file[255];
+  sprintf(img_file, "%d.%d.%d.ppm", dim, blocks, threads);
   write_ppm(img_file, h_img, dim, dim);
 
   free(h_img);

@@ -81,13 +81,13 @@ extern "C" {
 __global__
 void complex_kernel(int dim, rgb_pixel* src, rgb_pixel* dest) {
   int c_stride = blockDim.x;
-  int r_stride = gridDim.y;
+  /*int r_stride = gridDim.y;*/
 
   int i, j;
-  for(i=blockIdx.x; i < dim; i+=r_stride) {
+  for(i=0; i < dim; i++) {
     for(j = threadIdx.x; j < dim; j+=c_stride) {
       rgb_pixel px = src[(i*dim) + j];
-      px.r = px.g = px.b = ((int)px.r + (int)px.g + (int)px.b) / 3;
+      //px.r = px.g = px.b = ((int)px.r + (int)px.g + (int)px.b) / 3;
 
       int dest_r, dest_c;
       dest_r = (dim - j - 1);
@@ -104,12 +104,15 @@ void launch_complex_kernel(int grid, int block, int dim, rgb_pixel* d_src, rgb_p
   cudaEventCreate(&stop);
 
   printf("Launching complex kernel...\n");
-
+  printf("Blocks: %d \t Threads: %d\n", grid, block);
   rgb_pixel* d_dest;
   cudaMalloc((void**) &d_dest, sizeof(rgb_pixel) * dim * dim); 
+ 
+  dim3 grd(grid);
+  dim3 blk(block);
 
   cudaEventRecord(start);
-  complex_kernel<<<grid, block>>>(dim, d_src, d_dest);
+  complex_kernel<<<grd, blk>>>(dim, d_src, d_dest);
   cudaEventRecord(stop);
 
   cudaEventSynchronize(stop);
