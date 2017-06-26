@@ -99,6 +99,28 @@ void complex_kernel(int dim, rgb_pixel* src, rgb_pixel* dest) {
   }
 }
 
+__global__
+void complex_kernel_chunk(int dim, rgb_pixel* src, rgb_pixel* dest) {
+  int c_chunk_size = ceil((float)dim / (float)(blockDim.x * gridDim.x));;
+  int r_chunk_size = ceil((float)dim / (float)gridDim.y);
+  int grid_width = ceil((float)dim / (float)gridDim.x);
+  int c_anchor = (blockIdx.x * grid_width) + (threadIdx.x * c_chunk_size);
+  int r_anchor = (blockIdx.y * r_chunk_size);  
+
+  int i, j;
+  for(i=r_anchor; i < r_anchor + r_chunk_size && i < dim; i++) {
+    for(j = c_anchor; j < (c_anchor + c_chunk_size) && j < dim; j++) {
+      rgb_pixel px = src[(i*dim) + j];
+      px.r = px.g = px.b = ((int)px.r + (int)px.g + (int)px.b) / 3;
+
+      int dest_r, dest_c;
+      dest_r = (dim - j - 1);
+      dest_c = (dim - i - 1);
+      dest[(dest_r * dim) + dest_c] = px;
+    }
+  }
+}
+
 __host__
 void launch_complex_kernel(int gridX, int gridY, int block, int dim, rgb_pixel* d_src, rgb_pixel** h_dest) {
   cudaEvent_t start, stop;
@@ -114,7 +136,7 @@ void launch_complex_kernel(int gridX, int gridY, int block, int dim, rgb_pixel* 
   dim3 blk(block);
 
   cudaEventRecord(start);
-  complex_kernel<<<grd, blk>>>(dim, d_src, d_dest);
+  complex_kernel_chunk<<<grd, blk>>>(dim, d_src, d_dest);
   cudaEventRecord(stop);
 
   cudaEventSynchronize(stop);

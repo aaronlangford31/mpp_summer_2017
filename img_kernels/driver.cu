@@ -119,9 +119,9 @@ int main(int argc, char** argv) {
     exit(1);
   }
 
-  //char img_file[255];
-  //sprintf(img_file, "%d.%d.%d.%d.%c.ppm", dim, blocksX, blocksY, threads, mode);
-  //write_ppm(img_file, h_img, dim, dim);
+  char img_file[255];
+  sprintf(img_file, "%d.%d.%d.%d.%c.ppm", dim, blocksX, blocksY, threads, mode);
+  write_ppm(img_file, h_img, dim, dim);
 
   //free(h_img);
   return 0;
