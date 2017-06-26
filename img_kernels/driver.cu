@@ -106,9 +106,9 @@ int main(int argc, char** argv) {
   rgb_pixel* h_img, *d_img;
   generate_grad_image(dim, dim, blocksX, threads, &d_img);
 
-  h_img = (rgb_pixel*)malloc(dim*dim*sizeof(rgb_pixel));
-  cudaMemcpy(h_img, d_img, sizeof(rgb_pixel) * dim*dim, cudaMemcpyDeviceToHost);
-  write_ppm("actual.ppm", h_img, dim, dim);
+  //h_img = (rgb_pixel*)malloc(dim*dim*sizeof(rgb_pixel));
+  //cudaMemcpy(h_img, d_img, sizeof(rgb_pixel) * dim*dim, cudaMemcpyDeviceToHost);
+  //write_ppm("actual.ppm", h_img, dim, dim);
   
 
   if(mode == 'c') {
@@ -119,10 +119,10 @@ int main(int argc, char** argv) {
     exit(1);
   }
 
-  char img_file[255];
-  sprintf(img_file, "%d.%d.%d.%d.%c.ppm", dim, blocksX, blocksY, threads, mode);
-  write_ppm(img_file, h_img, dim, dim);
+  //char img_file[255];
+  //sprintf(img_file, "%d.%d.%d.%d.%c.ppm", dim, blocksX, blocksY, threads, mode);
+  //write_ppm(img_file, h_img, dim, dim);
 
-  free(h_img);
+  //free(h_img);
   return 0;
 }
