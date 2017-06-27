@@ -191,14 +191,14 @@ __global__
 void motion_kernel_halo(int dim, rgb_pixel* src, rgb_pixel* dest) {
   int c_stride = blockDim.x;
   int r_stride = gridDim.y;
-  int gridWidth = ceil((float)dim / (float)gridDim.x);
-  int j_anchor = blockIdx.x * gridWidth;
+  int pxl_per_blk_x = ceil((float)dim / (float)gridDim.x);
+  int j_anchor = blockIdx.x * pxl_per_blk_x;
   
   extern __shared__ rgb_pixel shared[];
     
   int i, j;
   for(i=blockIdx.y; i < dim; i+=r_stride) {
-    for(j = j_anchor + threadIdx.x; j < (j_anchor + gridWidth) && j < dim; j+=c_stride) {
+    for(j = j_anchor + threadIdx.x; j < (j_anchor + pxl_per_blk_x) && j < dim; j+=c_stride) { 
       shared[threadIdx.x] = src[i * dim + j];
       if(i + 1 < dim){
         shared[threadIdx.x + c_stride] = src[(i + 1) * dim + j];
@@ -220,7 +220,7 @@ void motion_kernel_halo(int dim, rgb_pixel* src, rgb_pixel* dest) {
           if((i+ii < dim) && (j + jj < dim)) {
             num_neighbors++;
             rgb_pixel px_n;
-            if(threadIdx.x + jj < c_stride) {
+            if(threadIdx.x + jj < pxl_per_blk_x) {
               px_n = shared[ii * c_stride + threadIdx.x + jj];
             } else {
               px_n = src[((i+ii)*dim) + jj + j];
@@ -254,7 +254,7 @@ void launch_motion_kernel(int gridX, int gridY, int block, int dim, rgb_pixel* d
   dim3 blk(block);
 
   cudaEventRecord(start);
-  motion_kernel<<<grd, blk>>>(dim, d_src, d_dest);
+  motion_kernel_halo<<<grd, blk, 42000>>>(dim, d_src, d_dest);
   cudaEventRecord(stop);
 
   cudaEventSynchronize(stop);
